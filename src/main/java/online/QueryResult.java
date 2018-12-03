@@ -60,15 +60,22 @@ public class QueryResult {
         searchNumber = searchVertexes.size();
     }
 
-    public static class VertexSetId {
-        public static int add(int id, int position) {
-            return id + 1 << position;
+    public class VertexSet {
+        private int id;
+
+        public VertexSet() { this(0); }
+        public VertexSet(int id) {
+            this.id = id;
         }
-        public static int remove(int id, int position) {
-            return id & ~(1 << position);
+
+        public VertexSet add(int vertexIndex) {
+            return new VertexSet(id + 1 << vertexIndex);
         }
-        public static boolean contains(int id, int position) {
-            return (id >>> position) % 2 == 1;
+        public VertexSet remove(int vertexIndex) {
+            return new VertexSet(id & ~(1 << vertexIndex));
+        }
+        public boolean contains(int vertexIndex) {
+            return (id >>> vertexIndex) % 2 == 1;
         }
     }
 
@@ -113,10 +120,8 @@ public class QueryResult {
         }
     }
 
-
-
-    private Map<Integer, Double> gain;
-    private Map<Integer, VertexPath> optimalPathForSet;
+    private Map<VertexSet, Double> gain;
+    private Map<VertexSet, VertexPath> optimalPathForSet;
     private Map<VertexPath, Double> pathWeight;
 
     private List<VertexPath> optimalPaths;
@@ -136,18 +141,18 @@ public class QueryResult {
             optimalPaths.add(null);
         }
 
-        PACER(0);
+        PACER(new VertexSet());
     }
 
-    public void PACER(int vertexSet) {
+    public void PACER(VertexSet vertexSet) {
         for (int i = 0; i < searchNumber; i++) {
 
-            int currentVertexSet = VertexSetId.add(vertexSet, i);
+            VertexSet currentVertexSet = vertexSet.add(i);
             double currentGain = calculateGain(vertexSet);
 
             for (int pathVertex = 0; pathVertex < searchNumber; pathVertex++) {
-                if (VertexSetId.contains(currentVertexSet, pathVertex)) {
-                    int pathPartSet = VertexSetId.remove(currentVertexSet, pathVertex);
+                if (currentVertexSet.contains(pathVertex)) {
+                    VertexSet pathPartSet = currentVertexSet.remove(pathVertex);
 
                     // TODO iterate through all and recalculate
                     VertexPath pathPart = optimalPathForSet.get(pathPartSet);
@@ -175,7 +180,7 @@ public class QueryResult {
         }
     }
 
-    public double calculateGain(int vertexSet) {
+    public double calculateGain(VertexSet vertexSet) {
         if (gain.containsKey(vertexSet))
             return gain.get(vertexSet);
 

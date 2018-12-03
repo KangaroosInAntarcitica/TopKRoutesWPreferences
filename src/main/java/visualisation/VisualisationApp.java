@@ -9,6 +9,7 @@ import javafx.scene.paint.Color;
 import javafx.stage.Stage;
 import offline.EdgeFrame;
 import offline.Path;
+import online.Online;
 
 import java.io.File;
 import java.io.FileReader;
@@ -30,7 +31,22 @@ public class VisualisationApp extends Application {
     }
 
     private List<Coordinate> coordinates;
+    private DrawingParameters parameters;
     private List<Path> edges;
+
+    private class DrawingParameters {
+        double border;
+        double minX, maxX, minY, maxY;
+        double scaleX, scaleY;
+        double borderX, borderY;
+
+        Coordinate change(Coordinate coordinate) {
+            Coordinate result = new Coordinate();
+            result.x = borderX + (coordinate.x - minX) * scaleX;
+            result.y = borderY + (coordinate.y - minY) * scaleY;
+            return result;
+        }
+    }
 
     @Override
     public void start(Stage primaryStage) throws Exception {
@@ -43,11 +59,22 @@ public class VisualisationApp extends Application {
         primaryStage.setScene(new Scene(parent, width, height));
         primaryStage.show();
 
+        Online online = new Online("sg");
+
         readCoordinates("sg");
         EdgeFrame edgeFrame = new EdgeFrame();
-        edgeFrame.readData(String.format("data/%s_undir_edges.txt", "sg"));
+        edgeFrame.readData("sg");
         edges = edgeFrame.getData();
-        draw();
+
+        parameters = new DrawingParameters();
+        parameters.border = 50;
+        findParameters();
+        drawEdges();
+        drawVertexes();
+
+        List<Integer> path = online.getPath(100,800);
+        System.out.println(path);
+        drawPath(path);
     }
 
     public void readCoordinates(String cityCode) {
@@ -71,52 +98,59 @@ public class VisualisationApp extends Application {
         }
     }
 
-    public void draw() {
-        double borders = 50;
+    public void findParameters() {
+        double border = parameters.border;
 
-        double minX = Collections.min(coordinates, Comparator.comparingDouble((Coordinate c) -> c.x)).x;
-        double maxX = Collections.max(coordinates, Comparator.comparingDouble((Coordinate c) -> c.x)).x;
-        double minY = Collections.min(coordinates, Comparator.comparingDouble((Coordinate c) -> c.y)).y;
-        double maxY = Collections.max(coordinates, Comparator.comparingDouble((Coordinate c) -> c.y)).y;
+        parameters.minX = Collections.min(coordinates, Comparator.comparingDouble((Coordinate c) -> c.x)).x;
+        parameters.maxX = Collections.max(coordinates, Comparator.comparingDouble((Coordinate c) -> c.x)).x;
+        parameters.minY = Collections.min(coordinates, Comparator.comparingDouble((Coordinate c) -> c.y)).y;
+        parameters.maxY = Collections.max(coordinates, Comparator.comparingDouble((Coordinate c) -> c.y)).y;
 
-        double distanceX = maxX - minX;
-        double distanceY = maxY - minY;
-        double scaleX, scaleY;
-        double borderX = borders, borderY = borders;
+        double distanceX = parameters.maxX - parameters.minX;
+        double distanceY = parameters.maxY - parameters.minY;
+        parameters.borderX = parameters.borderY = border;
 
         if (distanceX > distanceY) {
-            scaleX = (width - borders * 2) / distanceX;
-            scaleY = (height - borders * 2) / distanceX;
-            borderY = (distanceX - distanceY) / 2 + borders;
+            parameters.scaleX = (width - border * 2) / distanceX;
+            parameters.scaleY = (height - border * 2) / distanceX;
+            parameters.borderY = (distanceX - distanceY) / 2 + border;
         } else {
-            scaleX = (width - borders * 2) / distanceY;
-            scaleY = (height - borders * 2) / distanceY;
-            borderX = (distanceY - distanceX) / 2 + borders;
+            parameters.scaleX = (width - border * 2) / distanceY;
+            parameters.scaleY = (height - border * 2) / distanceY;
+            parameters.borderX = (distanceY - distanceX) / 2 + border;
         }
+    }
 
-        // Edges
-        context.setStroke(Color.color(0, 0, 1, 0.03));
-        for (Path edge: edges) {
-            Coordinate coordinateFrom = coordinates.get(edge.vertex);
-            Coordinate coordinateTo = coordinates.get(edge.vertexTo);
-
-            double xFrom = (coordinateFrom.x - minX) * scaleX + borderX;
-            double yFrom = (coordinateFrom.y - minY) * scaleY + borderY;
-            double xTo = (coordinateTo.x - minX) * scaleX + borderX;
-            double yTo = (coordinateTo.y - minY) * scaleY + borderY;
-
-            context.strokeLine(xFrom, yFrom, xTo, yTo);
-        }
-
+    public void drawVertexes() {
         // Circles
         context.setFill(Color.color(1, 0, 0, 0.5));
         for (Coordinate coordinate: coordinates) {
             double radius = 2;
-
-            double x = (coordinate.x - minX) * scaleX + borderX;
-            double y = (coordinate.y - minY) * scaleY + borderY;
-
-            context.fillOval(x - radius, y - radius, 2 * radius, 2 * radius);
+            Coordinate changed = parameters.change(coordinate);
+            context.fillOval(changed.x - radius, changed.y - radius, 2 * radius, 2 * radius);
         }
     }
+
+    private void drawEdge(int fromVertex, int toVertex) {
+        Coordinate coordinateFrom = parameters.change(coordinates.get(fromVertex));
+        Coordinate coordinateTo = parameters.change(coordinates.get(toVertex));
+
+        context.strokeLine(coordinateFrom.x, coordinateFrom.y, coordinateTo.x, coordinateTo.y);
+    }
+
+    public void drawEdges() {
+        // Edges
+        context.setStroke(Color.color(0, 0, 1, 0.03));
+        for (Path edge: edges) {
+            drawEdge(edge.vertex, edge.vertexTo);
+        }
+    }
+
+    public void drawPath(List<Integer> vertexes) {
+        context.setStroke(Color.color(0, 0, 0, 1));
+        for (int i = 0; i < vertexes.size() - 1; i++) {
+            drawEdge(vertexes.get(i), vertexes.get(i + 1));
+        }
+    }
+
 }

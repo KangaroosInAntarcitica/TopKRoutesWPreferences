@@ -22,18 +22,18 @@ public class Online {
 
         double[] featureRating = {0.5, 0.5};
         double minFeatureValue = 0.5;
-
-        // TODO remove - just testing
-        List<offline.Path> paths = twoHopFrame.getData();
-        int weight = twoHopFrame.getPathWeight(800, 1000);
-        System.out.println(weight);
-        List<Integer> path = twoHopFrame.getPath(800, 1000);
-        System.out.println(path);
     }
     public Online() {
         this("sg");
     }
 
+    public double getPathWeight(int start, int end) {
+        return twoHopFrame.getPathWeight(start, end);
+    }
+
+    public List<Integer> getPath(int start, int end) {
+        return twoHopFrame.getPath(start, end);
+    }
 
     private void processQuery(Query query) {
         // retrieving subIndex

@@ -68,7 +68,6 @@ public class FeaturesFrame {
         }
     }
 
-
     public FeaturesFrame(String cityCode) {
         // data - sorted by vertexes
         data = readData(cityCode);
