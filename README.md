@@ -15,7 +15,7 @@ Links to the original work:
 
 This is my coursework for the first term of *Algorithms and data structures* course at university.  
 The aim of it is to reproduce the results from the original paper.  
-I'm realising the algorithm in `Java`
+I'm implementing the algorithm in `Java`
 
 ### Structure & functions
 ##### Folders

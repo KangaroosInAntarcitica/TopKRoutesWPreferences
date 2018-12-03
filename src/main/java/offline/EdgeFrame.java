@@ -1,45 +1,15 @@
 package offline;
 
-import org.apache.spark.sql.Dataset;
-import org.apache.spark.sql.Row;
-import org.apache.spark.sql.SparkSession;
-import org.apache.spark.sql.functions;
-
 import java.io.*;
 import java.util.*;
 
 public class EdgeFrame {
-    private List<VertexConnection> data = null;
-    private List<VertexConnection> data2Hop = null;
+    private List<Path> data = null;
+    private List<Path> data2Hop = null;
     private int vertexNumber;
     private List<Integer> ranking;
 
-    @lombok.Getter
-    @lombok.Setter
-    private class VertexConnection extends Vertex {
-        private int vertex;
-        private int vertexTo;
-        private int weight;
-
-        public String toString() {
-            return String.format("%d -> %d (%d)", vertex, vertexTo, weight);
-        }
-
-        @Override
-        public int hashCode() {
-            return vertex * vertexNumber + vertexTo;
-        }
-
-        @Override
-        public boolean equals(Object other) {
-            if (!(other instanceof VertexConnection)) return false;
-            VertexConnection otherConnection = (VertexConnection) other;
-            return this.vertex == otherConnection.vertex && this.vertexTo == otherConnection.vertexTo;
-        }
-    }
-
-    @lombok.Getter
-    @lombok.Setter
+    // Used for ranking
     private class Vertex implements Serializable {
         private int vertex;
         private int count;
@@ -49,27 +19,46 @@ public class EdgeFrame {
         }
     }
 
-    public void readData(String path) {
+    // To represent Path in a HashMap
+    private int createId(int vertex, int vertexTo) {
+        return vertex * vertexNumber + vertexTo;
+    }
+    private class PathData {
+        // This class is used in a HashMap, where the vertexes represent the key
+        private int weight;
+        private int nextVertex;
+        private int lastVertex;
+
+        private PathData(int weight, int nextVertex, int lastVertex) {
+            this.weight = weight;
+            this.nextVertex = nextVertex;
+            this.lastVertex = lastVertex;
+        }
+
+        private PathData() {}
+    }
+
+    public void readData(String cityCode) {
+        String path = String.format("data/%s_undir_edges.txt", cityCode);
+
         if (this.data != null) {
             throw new RuntimeException("This object has already read a graph");
         }
 
         File file = new File(path);
 
-        List<VertexConnection> data = null;
+        List<Path> data = null;
 
         try (FileReader fileReader = new FileReader(file)) {
             Scanner scanner = new Scanner(fileReader);
 
             this.vertexNumber = scanner.nextInt();
+            scanner.nextLine();
 
             data = new ArrayList<>(vertexNumber * 3);
 
             while (scanner.hasNextInt()) {
-                VertexConnection item = new VertexConnection();
-                item.vertex = scanner.nextInt();
-                item.vertexTo = scanner.nextInt();
-                item.weight = scanner.nextInt();
+                Path item = new Path(scanner.nextLine());
                 data.add(item);
             }
         } catch (IOException e) {
@@ -79,18 +68,21 @@ public class EdgeFrame {
         this.data = data;
     }
 
-    public void writeData(String path) {
+    public void writeData(String cityCode) {
+        String filePath = String.format("data/%s_undir_2hop.txt", cityCode);
+
         if (this.data2Hop == null) {
             throw new RuntimeException("This object has not generated the data yet");
         }
 
-        File file = new File(path);
+        File file = new File(filePath);
 
         StringBuilder builder = new StringBuilder();
         builder.append(vertexNumber);
         builder.append("\n");
-        for (VertexConnection connection: data2Hop) {
-            builder.append(String.format("%d %d %d\n", connection.vertex, connection.vertexTo, connection.weight));
+        for (Path path: data2Hop) {
+            builder.append(path);
+            builder.append("\n");
         }
 
         try (FileWriter fileWriter = new FileWriter(file)) {
@@ -100,8 +92,8 @@ public class EdgeFrame {
         }
     }
 
-    private int createId(int vertex, int vertexTo) {
-        return vertex * vertexNumber + vertexTo;
+    public List<Path> getData() {
+        return data;
     }
 
     public void generate2HopTable() {
@@ -112,62 +104,76 @@ public class EdgeFrame {
         // Rank
         rank();
 
-        Map<Integer, Integer> allLabel = new HashMap<>(vertexNumber);
-        Map<Integer, Integer> currentLabel;
-        Map<Integer, Integer> prevLabel = new HashMap<>(vertexNumber);
+        Map<Integer, PathData> allLabel = new HashMap<>(vertexNumber);
+        Map<Integer, PathData> currentLabel;
+        Map<Integer, PathData> prevLabel = new HashMap<>(vertexNumber);
 
         // Initialization
         for (int i = 0; i < vertexNumber; i++) {
-            allLabel.put(createId(i, i), 0);
+            allLabel.put(createId(i, i), new PathData(0, i, i));
         }
 
-        for (VertexConnection connection: data) {
+        // Initialization - edges
+        for (Path connection: data) {
             // the path goes from the label with lower rank
+            PathData pathData = new PathData();
             int key;
             if (ranking.get(connection.vertex) > ranking.get(connection.vertexTo)) {
                 key = createId(connection.vertexTo, connection.vertex);
+                pathData.nextVertex = connection.vertex;
+                pathData.lastVertex = connection.vertexTo;
             } else {
                 key = createId(connection.vertex, connection.vertexTo);
+                pathData.nextVertex = connection.vertexTo;
+                pathData.lastVertex = connection.vertex;
             }
-
-            prevLabel.put(key, connection.weight);
+            pathData.weight = connection.weight;
+            prevLabel.put(key, pathData);
         }
         allLabel.putAll(prevLabel);
 
         // Main loop
         while (prevLabel.size() != 0) {
-            System.out.println("Iteration - " + prevLabel.size() + " " + allLabel.size());
+            System.out.format("Iteration - prevLabel.size: %10d, allLabel.size: %10d\n", prevLabel.size(), allLabel.size());
             currentLabel = new HashMap<>();
 
-            for (int connection: prevLabel.keySet()) {
-                int vertex = connection / vertexNumber;
-                int vertexTo = connection % vertexNumber;
+            for (int pathId: prevLabel.keySet()) {
+                int vertex = pathId / vertexNumber;
+                int vertexTo = pathId % vertexNumber;
+                PathData pathData = prevLabel.get(pathId);
 
-                for (int connection2: allLabel.keySet()) {
-                    int vertex2 = connection2 / vertexNumber;
-                    int vertexTo2 = connection2 % vertexNumber;
+                for (int pathId2: allLabel.keySet()) {
+                    int vertex2 = pathId2 / vertexNumber;
+                    int vertexTo2 = pathId2 % vertexNumber;
+                    PathData pathData2 = allLabel.get(pathId2);
 
                     // Rule 1
                     if (vertex == vertex2) {
-                        if (ranking.get(vertexTo) > ranking.get(vertexTo2) && ranking.get(vertexTo2) > ranking.get(vertex)) {
+                        if (ranking.get(vertexTo) > ranking.get(vertexTo2) /* && ranking.get(vertexTo2) > ranking.get(vertex) */) {
                             int newConnection = createId(vertexTo2, vertexTo);
-                            int newWeight = prevLabel.get(connection) + allLabel.get(connection2);
-                            if (!allLabel.containsKey(newConnection) || allLabel.get(newConnection) > newWeight)
-                                currentLabel.put(newConnection, newWeight);
+                            int newWeight = pathData.weight + pathData2.weight;
+                            if (!allLabel.containsKey(newConnection) || allLabel.get(newConnection).weight > newWeight) {
+                                int nextVertex = pathData2.lastVertex;
+                                int lastVertex = pathData.lastVertex;
+                                currentLabel.put(newConnection, new PathData(newWeight, nextVertex, lastVertex));
+                            }
                         }
                     }
                     // Rule 2
                     if (vertex == vertexTo2) {
                         int newConnection = createId(vertex2, vertexTo);
-                        int newWeight = prevLabel.get(connection) + allLabel.get(connection2);
-                        if (!allLabel.containsKey(newConnection) || allLabel.get(newConnection) > newWeight)
-                            currentLabel.put(newConnection, newWeight);
+                        int newWeight = prevLabel.get(pathId).weight + allLabel.get(pathId2).weight;
+                        if (!allLabel.containsKey(newConnection) || allLabel.get(newConnection).weight > newWeight) {
+                            int nextVertex = pathData2.nextVertex;
+                            int lastVertex = pathData.lastVertex;
+                            currentLabel.put(newConnection, new PathData(newWeight, nextVertex, lastVertex));
+                        }
                     }
                 }
             }
 
             for (int connection: currentLabel.keySet()) {
-                if (!allLabel.containsKey(connection) || allLabel.get(connection) > currentLabel.get(connection)) {
+                if (!allLabel.containsKey(connection) || allLabel.get(connection).weight > currentLabel.get(connection).weight) {
                     allLabel.put(connection, currentLabel.get(connection));
                 }
             }
@@ -176,21 +182,24 @@ public class EdgeFrame {
         }
 
         // save the result to data2Hop
-        List<VertexConnection> data2Hop = new ArrayList<>();
+        List<Path> data2Hop = new ArrayList<>();
         for (int connection: allLabel.keySet()) {
-            VertexConnection item = new VertexConnection();
+            Path item = new Path();
             item.vertex = connection / vertexNumber;
             item.vertexTo = connection % vertexNumber;
-            item.weight = allLabel.get(connection);
+            PathData connectionData = allLabel.get(connection);
+            item.weight = connectionData.weight;
+            item.nextVertex = connectionData.nextVertex;
+            item.lastVertex = connectionData.lastVertex;
             data2Hop.add(item);
         }
         this.data2Hop = data2Hop;
     }
 
-    private void printVertexMap(Map<Integer, Integer> data) {
+    private void printVertexMap(Map<Integer, PathData> data) {
         // Auxiliary function for testing
         for (int key: data.keySet())
-            System.out.printf("%d -> %d - %d\n", key / vertexNumber, key % vertexNumber, data.get(key));
+            System.out.printf("%d -> %d - %d\n", key / vertexNumber, key % vertexNumber, data.get(key).weight);
     }
 
     private void rank() {
@@ -202,12 +211,12 @@ public class EdgeFrame {
             allVertexes.add(vertex);
         }
 
-        for (VertexConnection vertexConnection: data) {
-            ++allVertexes.get(vertexConnection.vertex).count;
-            ++allVertexes.get(vertexConnection.vertexTo).count;
+        for (Path path : data) {
+            ++allVertexes.get(path.vertex).count;
+            ++allVertexes.get(path.vertexTo).count;
         }
 
-        allVertexes.sort((Vertex v1, Vertex v2) -> v1.count - v2.count);
+        allVertexes.sort(Comparator.comparingInt((Vertex v) -> v.count));
 
         List<Integer> ranking = new ArrayList<>(vertexNumber);
         for (int i = 0; i < vertexNumber; i++) {
@@ -219,10 +228,10 @@ public class EdgeFrame {
         this.ranking = ranking;
     }
 
-    public void processEdges(String pathFrom, String pathTo) {
-        readData(pathFrom);
+    public void processEdges(String cityCode) {
+        readData(cityCode);
         generate2HopTable();
-        writeData(pathTo);
+        writeData(cityCode);
     }
 
     public void clear() {
