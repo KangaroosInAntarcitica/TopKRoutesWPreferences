@@ -10,7 +10,7 @@ import java.util.*;
 
 public class FeaturesFrame {
     private int featureNumber = 0;
-    private List<VertexFeature> data;
+    private List<List<VertexFeature>> data;
 
     public int getFeatureNumber() {
         return featureNumber;
@@ -19,20 +19,19 @@ public class FeaturesFrame {
     @lombok.Getter
     @lombok.Setter
     public class VertexFeature implements Serializable {
-        private int feature;
-        private int vertex;
-        private double rating;
+        public int vertex;
+        public double rating;
 
         public String toString() {
-            return String.format("%d: %d (%.2f)", feature, vertex, rating);
+            return String.format("%d %.2f", vertex, rating);
         }
     }
 
-    private List<VertexFeature> readData(String cityCode) {
+    private List<List<VertexFeature>> readData(String cityCode) {
         String path = String.format("data/%s_inverted_kwds.txt", cityCode);
         File file = new File(path);
 
-        List<VertexFeature> data = new ArrayList<>();
+        List<List<VertexFeature>> data = new ArrayList<>();
 
         try {
             FileReader fileReader = new FileReader(file);
@@ -41,14 +40,16 @@ public class FeaturesFrame {
 
             while (scanner.hasNextInt()) {
                 int key = scanner.nextInt();
+                data.add(new ArrayList<>());
+
                 scanner.skip(":");
                 String[] items = scanner.nextLine().split("\\s");
                 for (int i = 0; i < items.length / 2; i++) {
                     VertexFeature item = new VertexFeature();
-                    item.feature = key;
+
                     item.vertex = Integer.parseInt(items[2 * i]);
                     item.rating = Float.parseFloat(items[2 * i + 1]);
-                    data.add(item);
+                    data.get(key).add(item);
                 }
 
                 if (key + 1 > featureNumber) featureNumber = key + 1;
@@ -69,71 +70,34 @@ public class FeaturesFrame {
     }
 
     public FeaturesFrame(String cityCode) {
-        // data - sorted by vertexes
+        // data - feature by index
         data = readData(cityCode);
-        data.sort(Comparator.comparingInt((VertexFeature f) -> f.vertex));
     }
 
     public void processQuery(QueryResult queryResult) {
         // Function returns a list of vertex-feature-rating for given criteria
 
-        List<VertexFeature> result = new ArrayList<>();
+        List<List<VertexFeature>> result = new ArrayList<>();
+        boolean[] vertexIncluded = new boolean[queryResult.vertexNumber];
+        for (int i = 0; i < queryResult.vertexNumber; i++) vertexIncluded[i] = false;
+
         double[] featureRating = queryResult.query.featurePreference;
         double minRating = queryResult.query.minFeatureValue;
 
-        for (VertexFeature vertexFeature : data) {
-            int feature = vertexFeature.feature;
-            double rating = vertexFeature.rating;
-            if (feature < featureRating.length && rating > featureRating[feature] && rating > minRating) {
-                result.add(vertexFeature);
+        for (int feature = 0; feature < featureNumber; feature++) {
+            List<VertexFeature> vertexes = data.get(feature);
+            result.add(new ArrayList<>());
+
+            for (VertexFeature vertex: vertexes) {
+                double rating = vertex.rating;
+                if (feature < featureRating.length && rating > featureRating[feature] && rating > minRating) {
+                    result.get(feature).add(vertex);
+                    vertexIncluded[vertex.vertex] = true;
+                }
             }
         }
 
         queryResult.features = result;
-
-        boolean[] vertexIncluded = new boolean[queryResult.vertexNumber];
-        for (int i = 0; i < queryResult.vertexNumber; i++) vertexIncluded[i] = false;
-        for (VertexFeature vertexFeature: queryResult.features) {
-            vertexIncluded[vertexFeature.vertex] = true;
-        }
-
         queryResult.vertexIncluded = vertexIncluded;
-    }
-
-    public double[] getVertexFeatures(List<VertexFeature> features, int vertex) {
-        // Returns the features of a corresponding vertex
-        double[] vertexFeatures = new double[featureNumber];
-        for (int i = 0; i < featureNumber; i++) vertexFeatures[i] = 0;
-
-        VertexFeature sampleVertexFeature = new VertexFeature();
-        sampleVertexFeature.vertex = vertex;
-        int vertexI = Collections.binarySearch(features, sampleVertexFeature, Comparator.comparingInt((VertexFeature f) -> f.vertex));
-        int deltaI = 0;
-        while (features.get(vertexI + deltaI - 1).vertex == vertex) deltaI--;
-
-        while (true) {
-            VertexFeature feature = features.get(vertexI + deltaI);
-            if (feature.vertex != vertex) break;
-
-            vertexFeatures[feature.feature] = feature.rating;
-            ++deltaI;
-        }
-
-        return vertexFeatures;
-    }
-
-    @Deprecated
-    public int[] getVertexOccurrences(QueryResult queryResult) {
-        // Deprecated
-        // Takes the vertex-feature-rating list and returns only the numbers of important vertexes
-
-        int[] occurrences = new int[queryResult.vertexNumber];
-        for (int i = 0; i < queryResult.vertexNumber; i++) occurrences[i] = 0;
-
-        for (VertexFeature vertexFeature: queryResult.features) {
-            occurrences[vertexFeature.vertex]++;
-        }
-
-        return occurrences;
     }
 }

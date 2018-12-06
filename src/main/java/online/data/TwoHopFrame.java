@@ -6,7 +6,6 @@ import online.QueryResult;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
-import java.io.Serializable;
 import java.util.*;
 
 public class TwoHopFrame {
@@ -40,7 +39,7 @@ public class TwoHopFrame {
         try (FileReader fileReader = new FileReader(file)) {
             Scanner scanner = new Scanner(fileReader);
 
-            int vertexNumber = scanner.nextInt();
+            vertexNumber = scanner.nextInt();
             scanner.nextLine();
             while (scanner.hasNextInt()) {
                 Path item = new Path(scanner.nextLine());
@@ -112,21 +111,6 @@ public class TwoHopFrame {
         }
 
         if (nextVertex < 0) return;
-
-//        int nextVertex = getBestHopOneDirection(start, end)[1];
-//        if (nextVertex == -1) return;
-//        if (nextVertex == start) {
-//            // Special case: when first hop returns back to start node
-//            int nextI1 = Collections.binarySearch(data, new Path(start, end), Comparator.comparingInt((Path p) -> p.vertex));
-//            int nextI2 = Collections.binarySearch(data, new Path(end, start), Comparator.comparingInt((Path p) -> p.vertex));
-//
-//            if (nextI1 >= 0)
-//                nextVertex = data.get(nextI1).nextVertex;
-//            else
-//                nextVertex = data.get(nextI2).nextVertex;
-//        }
-
-        // System.out.printf("%d %d %d\n", start, nextVertex, end);
 
         getPath(result, nextVertex, end);
     }
@@ -241,19 +225,6 @@ public class TwoHopFrame {
         }
 
         return new int[]{minWeight, minPivot, nextVertex, lastVertex};
-    }
-
-    @Deprecated
-    public int[] getVertexOccurrences(List<Path> paths) {
-        int[] occurrences = new int[vertexNumber];
-        for (int i = 0; i < vertexNumber; i++) occurrences[i] = 0;
-
-        for (Path path: paths) {
-            occurrences[path.vertex]++;
-            occurrences[path.vertexTo]++;
-        }
-
-        return occurrences;
     }
 
 }

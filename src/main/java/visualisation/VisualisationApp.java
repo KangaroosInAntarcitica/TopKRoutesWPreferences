@@ -10,6 +10,8 @@ import javafx.stage.Stage;
 import offline.EdgeFrame;
 import offline.Path;
 import online.Online;
+import online.Query;
+import online.QueryResult;
 
 import java.io.File;
 import java.io.FileReader;
@@ -72,9 +74,24 @@ public class VisualisationApp extends Application {
         drawEdges();
         drawVertexes();
 
-        List<Integer> path = online.getPath(100,800);
+//        List<Integer> path = online.getPath(1202, 1201);
+//        System.out.println(path);
+//        drawPath(path);
+
+        Query query = new Query();
+        query.start = 0;
+        query.end = 1;
+        query.budget = 110;
+        query.featurePreference = new double[]{0.5, 0.5};
+        query.minFeatureValue = 0.5;
+
+        QueryResult result = online.processQuery(query);
+        List<Integer> path = result.retrievePath(result.optimalPaths.get(0));
         System.out.println(path);
         drawPath(path);
+        List<Integer> path2 = result.retrievePath(result.optimalPaths.get(0));
+        System.out.println(path2);
+        drawPath(path2);
     }
 
     public void readCoordinates(String cityCode) {

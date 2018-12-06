@@ -35,10 +35,11 @@ public class Online {
         return twoHopFrame.getPath(start, end);
     }
 
-    private void processQuery(Query query) {
+    public QueryResult processQuery(Query query) {
         // retrieving subIndex
         QueryResult result = new QueryResult(query, featuresFrame, weightFrame, twoHopFrame);
         result.processQuery();
+        return result;
     }
 
     public List<Integer> getImportantVertexes(int[] vertexOccurrences, int vertexNumber) {

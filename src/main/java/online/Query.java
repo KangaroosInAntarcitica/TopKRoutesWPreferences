@@ -8,7 +8,12 @@ import java.util.List;
 @lombok.Setter
 public class Query {
     public interface AggregationFunction {
-        double call(int feature, QueryResult.VertexSet vertexSet);
+        double call(QueryResult queryResult, int feature, QueryResult.VertexSet vertexSet);
+    }
+
+    public Query() {
+        minFeatureValue = 0.5;
+        routeDiversityFunction = new PowerLawFunction();
     }
 
     public int start;
@@ -19,18 +24,25 @@ public class Query {
     public AggregationFunction routeDiversityFunction;
 
     public class PowerLawFunction implements AggregationFunction {
-        private List<Integer> searchVertexes;
-        private FeaturesFrame featuresFrame;
+        private double alpha;
 
-        public PowerLawFunction(List<Integer> searchVertexes, FeaturesFrame featuresFrame) {
-            this.searchVertexes = searchVertexes;
-            this.featuresFrame = featuresFrame;
+        public PowerLawFunction(double alpha) {
+            this.alpha = alpha;
         }
+        public PowerLawFunction() { this(0.8); }
 
-        public double call(int feature, QueryResult.VertexSet vertexSet) {
+        public double call(QueryResult queryResult, int feature, QueryResult.VertexSet vertexSet) {
             double result = 0;
 
-            // TODO write function body
+            List<FeaturesFrame.VertexFeature> vertexes = queryResult.features.get(feature);
+            int rating = 0;
+            for (FeaturesFrame.VertexFeature vertexFeature: vertexes) {
+                if (vertexSet.contains(vertexFeature.vertex)) {
+                    ++rating;
+
+                    result += Math.pow(rating, - alpha) * vertexFeature.rating;
+                }
+            }
 
             return result;
         }
