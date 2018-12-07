@@ -6,6 +6,7 @@ import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.paint.Color;
+import javafx.scene.paint.Paint;
 import javafx.stage.Stage;
 import offline.EdgeFrame;
 import offline.Path;
@@ -18,6 +19,8 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.util.*;
 import java.util.List;
+
+import java.lang.System;
 
 public class VisualisationApp extends Application {
     private int width = 1000;
@@ -74,24 +77,28 @@ public class VisualisationApp extends Application {
         drawEdges();
         drawVertexes();
 
-//        List<Integer> path = online.getPath(1202, 1201);
-//        System.out.println(path);
-//        drawPath(path);
+        long startTime = System.currentTimeMillis();
+
+        List<Integer> pathBest = online.getPath(1202, 1201);
+        System.out.println(pathBest);
+        drawPath(pathBest, Color.color(1,0,1));
 
         Query query = new Query();
         query.start = 0;
-        query.end = 1;
-        query.budget = 110;
+        query.end = 0;
+        query.budget = 120;
         query.featurePreference = new double[]{0.5, 0.5};
         query.minFeatureValue = 0.5;
 
         QueryResult result = online.processQuery(query);
         List<Integer> path = result.retrievePath(result.optimalPaths.get(0));
         System.out.println(path);
-        drawPath(path);
-        List<Integer> path2 = result.retrievePath(result.optimalPaths.get(0));
+        drawPath(path, Color.color(0, 0, 0));
+        List<Integer> path2 = result.retrievePath(result.optimalPaths.get(1));
         System.out.println(path2);
-        drawPath(path2);
+        drawPath(path2, Color.color(0, 1, 0));
+
+        System.out.format("Run time: %.5fs\n", (double) (System.currentTimeMillis() - startTime) / 1000);
     }
 
     public void readCoordinates(String cityCode) {
@@ -163,8 +170,8 @@ public class VisualisationApp extends Application {
         }
     }
 
-    public void drawPath(List<Integer> vertexes) {
-        context.setStroke(Color.color(0, 0, 0, 1));
+    public void drawPath(List<Integer> vertexes, Paint paint) {
+        context.setStroke(paint);
         for (int i = 0; i < vertexes.size() - 1; i++) {
             drawEdge(vertexes.get(i), vertexes.get(i + 1));
         }

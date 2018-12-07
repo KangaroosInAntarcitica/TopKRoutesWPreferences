@@ -13,9 +13,15 @@ public class WeightFrame {
 
     @lombok.Getter
     @lombok.Setter
-    public class VertexWeight {
+    public static class VertexWeight {
         private int vertex;
         private double weight;
+
+        public VertexWeight(int vertex, double weight) {
+            this.vertex = vertex;
+            this.weight = weight;
+        }
+        public VertexWeight(){}
 
         public String toString() {
             return String.format("%d (%f)", vertex, weight);

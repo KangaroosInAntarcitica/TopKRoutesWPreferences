@@ -7,9 +7,11 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.*;
+import online.data.WeightFrame.VertexWeight;
 
 public class TwoHopFrame {
     private List<Path> data;
+    private List<List<Path>> dataStartVertex;
     private int vertexNumber;
     private PathComparator pathComparator = new PathComparator();
 
@@ -26,36 +28,39 @@ public class TwoHopFrame {
     }
 
     public TwoHopFrame(String cityCode) {
-        data = readData(cityCode);
-        data.sort(new PathComparator());
+        readData(cityCode);
     }
 
-    private List<Path> readData(String cityCode) {
+    private void readData(String cityCode) {
         String path = String.format("data/%s_undir_2hop.txt", cityCode);
         File file = new File(path);
 
         List<Path> data = new ArrayList<>();
+        List<List<Path>> dataStartVertex = new ArrayList<>();
 
         try (FileReader fileReader = new FileReader(file)) {
             Scanner scanner = new Scanner(fileReader);
 
             vertexNumber = scanner.nextInt();
             scanner.nextLine();
+            for (int i = 0; i < vertexNumber; i++) dataStartVertex.add(new ArrayList<>());
+
             while (scanner.hasNextInt()) {
                 Path item = new Path(scanner.nextLine());
                 data.add(item);
+                dataStartVertex.get(item.vertex).add(item);
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
 
-        return data;
-    }
-
-    public void printData() {
-        for (Path path: data) {
-            System.out.println(path);
+        for (int i = 0; i < vertexNumber; i++) {
+            dataStartVertex.get(i).sort(Comparator.comparingInt((Path p) -> p.vertexTo));
         }
+
+        this.data = data;
+        data.sort(new PathComparator());
+        this.dataStartVertex = dataStartVertex;
     }
 
     public List<Path> getData() {
@@ -90,141 +95,174 @@ public class TwoHopFrame {
         queryResult.vertexIncluded = vertexIncluded2;
     }
 
-    public List<Integer> getPath(int start, int end) {
-        List<Integer> result = new ArrayList<>();
-        getPath(result, start, end);
-        return result;
-    }
+    public void getDataSubIndex(QueryResult queryResult) {
+        int[] usages = new int[queryResult.vertexNumber];
+        for (int i = 0; i < usages.length; i++) usages[i] = 0;
 
-    private void getPath(List<Integer> result, int start, int end) {
-        result.add(start);
-        if (start == end) return;
-
-        int[] hop1 = getBestHopOneDirection(start, end);
-        int[] hop2 = getBestHopOneDirection(end, start);
-
-        int nextVertex;
-        if (hop1[1] < 0 || hop2[1] >= 0 && hop2[0] > hop1[0]) {
-            nextVertex = hop1[2];
-        } else  {
-            nextVertex = hop2[3];
+        // Find all the vertexes, that are used as pivots at least twice
+        for (int vertex = 0; vertex < queryResult.vertexNumber; vertex++) {
+            if (queryResult.vertexIncluded[vertex]) {
+                for (Path path: dataStartVertex.get(vertex)) {
+                    usages[path.vertexTo] += 1;
+                }
+            }
         }
 
-        if (nextVertex < 0) return;
+        // Create a list with all required vertexes - subIndex
+        List<List<Path>> subDataStartVertex = new ArrayList<>();
+        for (int i = 0; i < queryResult.vertexNumber; i++) subDataStartVertex.add(null);
+        for (int vertex = 0; vertex < queryResult.vertexNumber; vertex++) {
+            if (queryResult.vertexIncluded[vertex]
+                    || vertex == queryResult.query.start || vertex == queryResult.query.end) {
+                subDataStartVertex.set(vertex, new ArrayList<>());
 
-        getPath(result, nextVertex, end);
-    }
-
-    public int getPathWeight(int start, int end) {
-        int weight1 = getBestWeightOneDirection(start, end);
-        int weight2 = getBestWeightOneDirection(end, start);
-
-        if (weight1 < weight2) {
-            return weight1;
-        } else {
-            return weight2;
-        }
-    }
-
-    private int getBestWeightOneDirection(int start, int end) {
-        // Returns result as array: [weight, pivot, nextVertex, lastVertex]
-
-        List<Path> paths = data;
-
-        // Binary search of starting points
-        Path sampleStartPath = new Path(start, 0);
-        int startI = Collections.binarySearch(data, sampleStartPath, Comparator.comparingInt((Path p) -> p.vertex));
-
-        if (startI < 0) return Integer.MAX_VALUE;
-        int deltaI = 0;
-        while (startI + deltaI - 1 >= 0 && paths.get(startI + deltaI - 1).vertex == start) {
-            --deltaI;
-        }
-
-        int minWeight = Integer.MAX_VALUE;
-
-        while (paths.get(startI + deltaI).vertex == start) {
-            Path startPath = paths.get(startI + deltaI);
-            int pivot = startPath.vertexTo;
-
-            // Take both forward and backward paths
-            for (int i = 0; i < 2; i++) {
-                Path endPath;
-                if (i == 0) endPath = new Path(pivot, end);
-                else endPath = new Path(end, pivot);
-
-                int endI = Collections.binarySearch(data, endPath, pathComparator);
-
-                if (endI >= 0) {
-                    int weight = startPath.weight + paths.get(endI).weight;
-                    if (weight < minWeight) {
-                        minWeight = weight;
+                for (Path path : dataStartVertex.get(vertex)) {
+                    if (usages[path.vertexTo] > 1) {
+                        subDataStartVertex.get(vertex).add(path);
                     }
                 }
             }
+        }
 
-            deltaI += 1;
+        // Create an array with key - vertex, value - its minimal total weight
+        // total weight - weight of vertex + weight of hop to it
+        double[] minVertexTotalWeight = new double[vertexNumber];
+        for (int i = 0; i < queryResult.vertexNumber; i++)
+            minVertexTotalWeight[i] = Double.MAX_VALUE;
+        for (int vertex = 0; vertex < queryResult.vertexNumber; vertex++) {
+            for (Path path: dataStartVertex.get(vertex)) {
+                if (usages[path.vertex] > 1) {
+                    int vertexTo = path.vertexTo;
+                    double totalWeight = path.weight + queryResult.getVertexWeight(vertexTo);
+
+                    if (vertex != vertexTo && totalWeight < minVertexTotalWeight[vertexTo]) {
+                        if(queryResult.vertexIncluded[vertexTo]
+                                || vertexTo == queryResult.query.start || vertexTo == queryResult.query.end) {
+                            if (path.weight == 0)
+                                System.out.println(path.weight);
+                            minVertexTotalWeight[vertexTo] = totalWeight;
+                        }
+                    }
+                }
+            }
+        }
+
+        // sorted list of weights
+        // this is indexed according to searchVertexes
+        List<VertexWeight> minVertexTotalWeightList = new ArrayList<>();
+        for (int i = 0; i < queryResult.searchNumber; i++) {
+            int globalI = queryResult.searchVertexes.get(i);
+            if (minVertexTotalWeight[globalI] <= Double.MAX_VALUE) {
+                minVertexTotalWeightList.add(new VertexWeight(i, minVertexTotalWeight[globalI]));
+            }
+        }
+        minVertexTotalWeightList.sort(Comparator.comparingDouble((VertexWeight::getWeight)));
+
+        queryResult.hops = subDataStartVertex;
+        queryResult.minVertexTotalWeight = minVertexTotalWeightList;
+        queryResult.minVertexTotalWeightByIndex = minVertexTotalWeight;
+    }
+
+    public List<Integer> getPath(List<List<Path>> dataStartVertex, int start, int end) {
+        List<Integer> result = new ArrayList<>();
+        getPath(dataStartVertex, result, start, end);
+        return result;
+    }
+    public List<Integer> getPath(int start, int end) {
+        return getPath(dataStartVertex, start, end);
+    }
+
+    private void getPath(List<List<Path>> dataStartVertex, List<Integer> result, int start, int end) {
+        result.add(start);
+        if (start == end) return;
+
+        int[] hop = getBestHop(dataStartVertex, start, end);
+        int nextVertex = hop[2];
+        if (nextVertex < 0) return;
+
+        getPath(dataStartVertex, result, nextVertex, end);
+    }
+
+    public int getPathWeight(List<List<Path>> dataStartVertex, int start, int end) {
+        int minWeight = Integer.MAX_VALUE;
+
+        List<Path> startPaths = dataStartVertex.get(start);
+        List<Path> endPaths = dataStartVertex.get(end);
+
+        int startI = 0;
+        int endI = 0;
+
+        while (startI < startPaths.size() && endI < endPaths.size()){
+            int startVertexTo = startPaths.get(startI).vertexTo;
+            int endVertexTo = endPaths.get(endI).vertexTo;
+
+            if (startVertexTo < endVertexTo) {
+                ++startI;
+            }
+            else if (startVertexTo > endVertexTo) {
+                ++endI;
+            }
+            else {
+                int weight = startPaths.get(startI).weight + endPaths.get(endI).weight;
+                if (weight < minWeight) {
+                    minWeight = weight;
+                }
+
+                ++startI;
+                ++endI;
+            }
         }
 
         return minWeight;
     }
+    public double getPathWeight(int start, int end) {
+        return getPathWeight(dataStartVertex, start, end);
+    }
 
-    private int[] getBestHopOneDirection(int start, int end) {
+    private int[] getBestHop(List<List<Path>> dataStartVertex, int start, int end) {
         // Returns result as array: [weight, pivot, nextVertex, lastVertex]
-
-        List<Path> paths = data;
-
-        // Binary search of starting points
-        Path sampleStartPath = new Path(start, 0);
-        int startI = Collections.binarySearch(data, sampleStartPath, Comparator.comparingInt((Path p) -> p.vertex));
-
-        if (startI < 0) return new int[]{Integer.MAX_VALUE, -1};
-        int deltaI = 0;
-        while (startI + deltaI - 1 >= 0 && paths.get(startI + deltaI - 1).vertex == start) {
-            --deltaI;
-        }
 
         int minWeight = Integer.MAX_VALUE;
         int minPivot = -1;
-        int nextVertex = -1, lastVertex = -1;
+        int nextVertex = -1;
 
-        while (paths.get(startI + deltaI).vertex == start) {
-            Path startPath = paths.get(startI + deltaI);
-            int pivot = startPath.vertexTo;
+        List<Path> startPaths = dataStartVertex.get(start);
+        List<Path> endPaths = dataStartVertex.get(end);
 
-            // Take both forward and backward paths
-            for (int i = 0; i < 2; i++) {
-                Path endPath;
-                if (i == 0) endPath = new Path(pivot, end);
-                else endPath = new Path(end, pivot);
+        int startI = 0;
+        int endI = 0;
 
-                int endI = Collections.binarySearch(data, endPath, pathComparator);
+        while (startI < startPaths.size() && endI < endPaths.size()){
+            int startVertexTo = startPaths.get(startI).vertexTo;
+            int endVertexTo = endPaths.get(endI).vertexTo;
 
-                if (endI >= 0) {
-                    endPath = paths.get(endI);
-
-                    int weight = startPath.weight + endPath.weight;
-                    if (weight < minWeight) {
-                        minWeight = weight;
-                        minPivot = pivot;
-
-                        // Next vertex and last vertex calculations
-                        nextVertex = startPath.nextVertex;
-                        if (nextVertex == start) {
-                            nextVertex = i == 0 ? endPath.nextVertex : endPath.lastVertex;
-                        }
-                        lastVertex = i == 0 ? endPath.lastVertex : endPath.nextVertex;
-                        if (lastVertex == end) {
-                            lastVertex = startPath.lastVertex;
-                        }
-                    }
-                }
+            if (startVertexTo < endVertexTo) {
+                ++startI;
             }
+            else if (startVertexTo > endVertexTo) {
+                ++endI;
+            }
+            else {
+                Path startPath = startPaths.get(startI);
+                Path endPath = endPaths.get(endI);
+                int pivot = startPath.vertexTo;
+                int weight = startPath.weight + endPath.weight;
 
-            deltaI += 1;
+                if (weight < minWeight) {
+                    minWeight = weight;
+                    minPivot = startVertexTo;
+
+                    // Next vertex and calculations
+                    nextVertex = startPath.nextVertex;
+                    if (pivot == start) nextVertex = endPath.lastVertex;
+                }
+
+                ++startI;
+                ++endI;
+            }
         }
 
-        return new int[]{minWeight, minPivot, nextVertex, lastVertex};
+        return new int[]{minWeight, minPivot, nextVertex};
     }
 
 }

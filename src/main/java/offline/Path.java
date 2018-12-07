@@ -42,4 +42,9 @@ public class Path implements Serializable {
         Path otherConnection = (Path) other;
         return this.vertex == otherConnection.vertex && this.vertexTo == otherConnection.vertexTo;
     }
+
+    public int getId(int vertexNumber) {
+        // Used for maps - as hash code
+        return vertexNumber * vertex + vertexTo;
+    }
 }
