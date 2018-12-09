@@ -21,9 +21,9 @@ public class TwoHopFrame {
 
     public class PathComparator implements Comparator<Path> {
         public int compare(Path path1, Path path2) {
-            if (path1.vertex == path2.vertex)
-                return path1.vertexTo - path2.vertexTo;
-            return path1.vertex - path2.vertex;
+            if (path1.getVertex() == path2.getVertex())
+                return path1.getVertexTo() - path2.getVertexTo();
+            return path1.getVertex() - path2.getVertex();
         }
     }
 
@@ -48,14 +48,14 @@ public class TwoHopFrame {
             while (scanner.hasNextInt()) {
                 Path item = new Path(scanner.nextLine());
                 data.add(item);
-                dataStartVertex.get(item.vertex).add(item);
+                dataStartVertex.get(item.getVertex()).add(item);
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
 
         for (int i = 0; i < vertexNumber; i++) {
-            dataStartVertex.get(i).sort(Comparator.comparingInt((Path p) -> p.vertexTo));
+            dataStartVertex.get(i).sort(Comparator.comparingInt((Path p) -> p.getVertexTo()));
         }
 
         this.data = data;
@@ -70,21 +70,22 @@ public class TwoHopFrame {
     public void processQuery(QueryResult queryResult) {
         List<Path> paths = new ArrayList<>(vertexNumber);
 
+        boolean[] vertexIncluded = queryResult.getVertexIncluded();
         boolean[] vertexIncluded1 = new boolean[vertexNumber];
         for (int i = 0; i < vertexNumber; i++) vertexIncluded1[i] = false;
         for (Path path: data) {
-            vertexIncluded1[path.vertex] = queryResult.vertexIncluded[path.vertex];
-            vertexIncluded1[path.vertexTo] = queryResult.vertexIncluded[path.vertexTo];
+            vertexIncluded1[path.getVertex()] = vertexIncluded[path.getVertex()];
+            vertexIncluded1[path.getVertexTo()] = vertexIncluded[path.getVertexTo()];
         }
 
-        double budget = queryResult.query.budget;
+        double budget = queryResult.query.getBudget();
         boolean[] vertexIncluded2 = new boolean[vertexNumber];
-        for (int vertex = 0; vertex < queryResult.vertexNumber; vertex++) {
+        for (int vertex = 0; vertex < queryResult.getVertexNumber(); vertex++) {
             vertexIncluded2[vertex] = false;
             if (vertexIncluded1[vertex]) {
                 double totalWeight = queryResult.getVertexWeight(vertex);
-                totalWeight += getPathWeight(queryResult.query.start, vertex);
-                totalWeight += getPathWeight(vertex, queryResult.query.end);
+                totalWeight += getPathWeight(queryResult.query.getStart(), vertex);
+                totalWeight += getPathWeight(vertex, queryResult.query.getEnd());
 
                 if (totalWeight <= budget) {
                     vertexIncluded2[vertex] = true;
@@ -92,32 +93,35 @@ public class TwoHopFrame {
             }
         }
 
-        queryResult.vertexIncluded = vertexIncluded2;
+        queryResult.setVertexIncluded(vertexIncluded2);
     }
 
     public void getDataSubIndex(QueryResult queryResult) {
-        int[] usages = new int[queryResult.vertexNumber];
+        int vertexNumber = queryResult.getVertexNumber();
+        boolean[] vertexIncluded = queryResult.getVertexIncluded();
+
+        int[] usages = new int[vertexNumber];
         for (int i = 0; i < usages.length; i++) usages[i] = 0;
 
         // Find all the vertexes, that are used as pivots at least twice
-        for (int vertex = 0; vertex < queryResult.vertexNumber; vertex++) {
-            if (queryResult.vertexIncluded[vertex]) {
+        for (int vertex = 0; vertex < vertexNumber; vertex++) {
+            if (vertexIncluded[vertex]) {
                 for (Path path: dataStartVertex.get(vertex)) {
-                    usages[path.vertexTo] += 1;
+                    usages[path.getVertexTo()] += 1;
                 }
             }
         }
 
         // Create a list with all required vertexes - subIndex
         List<List<Path>> subDataStartVertex = new ArrayList<>();
-        for (int i = 0; i < queryResult.vertexNumber; i++) subDataStartVertex.add(null);
-        for (int vertex = 0; vertex < queryResult.vertexNumber; vertex++) {
-            if (queryResult.vertexIncluded[vertex]
-                    || vertex == queryResult.query.start || vertex == queryResult.query.end) {
+        for (int i = 0; i < vertexNumber; i++) subDataStartVertex.add(null);
+        for (int vertex = 0; vertex < vertexNumber; vertex++) {
+            if (vertexIncluded[vertex]
+                    || vertex == queryResult.query.getStart() || vertex == queryResult.query.getEnd()) {
                 subDataStartVertex.set(vertex, new ArrayList<>());
 
                 for (Path path : dataStartVertex.get(vertex)) {
-                    if (usages[path.vertexTo] > 1) {
+                    if (usages[path.getVertexTo()] > 1) {
                         subDataStartVertex.get(vertex).add(path);
                     }
                 }
@@ -127,19 +131,19 @@ public class TwoHopFrame {
         // Create an array with key - vertex, value - its minimal total weight
         // total weight - weight of vertex + weight of hop to it
         double[] minVertexTotalWeight = new double[vertexNumber];
-        for (int i = 0; i < queryResult.vertexNumber; i++)
+        for (int i = 0; i < vertexNumber; i++)
             minVertexTotalWeight[i] = Double.MAX_VALUE;
-        for (int vertex = 0; vertex < queryResult.vertexNumber; vertex++) {
+        for (int vertex = 0; vertex < vertexNumber; vertex++) {
             for (Path path: dataStartVertex.get(vertex)) {
-                if (usages[path.vertex] > 1) {
-                    int vertexTo = path.vertexTo;
-                    double totalWeight = path.weight + queryResult.getVertexWeight(vertexTo);
+                if (usages[path.getVertex()] > 1) {
+                    int vertexTo = path.getVertexTo();
+                    double totalWeight = path.getWeight() + queryResult.getVertexWeight(vertexTo);
 
                     if (vertex != vertexTo && totalWeight < minVertexTotalWeight[vertexTo]) {
-                        if(queryResult.vertexIncluded[vertexTo]
-                                || vertexTo == queryResult.query.start || vertexTo == queryResult.query.end) {
-                            if (path.weight == 0)
-                                System.out.println(path.weight);
+                        if(vertexIncluded[vertexTo]
+                                || vertexTo == queryResult.query.getStart() || vertexTo == queryResult.query.getEnd()) {
+                            if (path.getWeight() == 0)
+                                System.out.println(path.getWeight());
                             minVertexTotalWeight[vertexTo] = totalWeight;
                         }
                     }
@@ -150,17 +154,17 @@ public class TwoHopFrame {
         // sorted list of weights
         // this is indexed according to searchVertexes
         List<VertexWeight> minVertexTotalWeightList = new ArrayList<>();
-        for (int i = 0; i < queryResult.searchNumber; i++) {
-            int globalI = queryResult.searchVertexes.get(i);
+        for (int i = 0; i < queryResult.getSearchNumber(); i++) {
+            int globalI = queryResult.getSearchVertexes().get(i);
             if (minVertexTotalWeight[globalI] <= Double.MAX_VALUE) {
                 minVertexTotalWeightList.add(new VertexWeight(i, minVertexTotalWeight[globalI]));
             }
         }
         minVertexTotalWeightList.sort(Comparator.comparingDouble((VertexWeight::getWeight)));
 
-        queryResult.hops = subDataStartVertex;
-        queryResult.minVertexTotalWeight = minVertexTotalWeightList;
-        queryResult.minVertexTotalWeightByIndex = minVertexTotalWeight;
+        queryResult.setHops(subDataStartVertex);
+        queryResult.setMinVertexTotalWeightByIndex(minVertexTotalWeight);
+        queryResult.setMinVertexTotalWeight(minVertexTotalWeightList);
     }
 
     public List<Integer> getPath(List<List<Path>> dataStartVertex, int start, int end) {
@@ -193,8 +197,8 @@ public class TwoHopFrame {
         int endI = 0;
 
         while (startI < startPaths.size() && endI < endPaths.size()){
-            int startVertexTo = startPaths.get(startI).vertexTo;
-            int endVertexTo = endPaths.get(endI).vertexTo;
+            int startVertexTo = startPaths.get(startI).getVertexTo();
+            int endVertexTo = endPaths.get(endI).getVertexTo();
 
             if (startVertexTo < endVertexTo) {
                 ++startI;
@@ -203,7 +207,7 @@ public class TwoHopFrame {
                 ++endI;
             }
             else {
-                int weight = startPaths.get(startI).weight + endPaths.get(endI).weight;
+                int weight = startPaths.get(startI).getWeight() + endPaths.get(endI).getWeight();
                 if (weight < minWeight) {
                     minWeight = weight;
                 }
@@ -233,8 +237,8 @@ public class TwoHopFrame {
         int endI = 0;
 
         while (startI < startPaths.size() && endI < endPaths.size()){
-            int startVertexTo = startPaths.get(startI).vertexTo;
-            int endVertexTo = endPaths.get(endI).vertexTo;
+            int startVertexTo = startPaths.get(startI).getVertexTo();
+            int endVertexTo = endPaths.get(endI).getVertexTo();
 
             if (startVertexTo < endVertexTo) {
                 ++startI;
@@ -245,16 +249,16 @@ public class TwoHopFrame {
             else {
                 Path startPath = startPaths.get(startI);
                 Path endPath = endPaths.get(endI);
-                int pivot = startPath.vertexTo;
-                int weight = startPath.weight + endPath.weight;
+                int pivot = startPath.getVertexTo();
+                int weight = startPath.getWeight() + endPath.getWeight();
 
                 if (weight < minWeight) {
                     minWeight = weight;
                     minPivot = startVertexTo;
 
                     // Next vertex and calculations
-                    nextVertex = startPath.nextVertex;
-                    if (pivot == start) nextVertex = endPath.lastVertex;
+                    nextVertex = startPath.getNextVertex();
+                    if (pivot == start) nextVertex = endPath.getLastVertex();
                 }
 
                 ++startI;

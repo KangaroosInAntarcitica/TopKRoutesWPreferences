@@ -27,7 +27,7 @@ public class Online {
         this("sg");
     }
 
-    public double getPathWeight(int start, int end) {
+    public double getPathCost(int start, int end) {
         return twoHopFrame.getPathWeight(start, end);
     }
 
@@ -40,17 +40,5 @@ public class Online {
         QueryResult result = new QueryResult(query, featuresFrame, weightFrame, twoHopFrame);
         result.processQuery();
         return result;
-    }
-
-    public List<Integer> getImportantVertexes(int[] vertexOccurrences, int vertexNumber) {
-        // Returns a list of important vertexes out of the vertexOccurrences array
-
-        List<Integer> important = new ArrayList<>();
-        for (int i = 0; i < vertexNumber; i++) {
-            if (vertexOccurrences[i] > 0)
-                important.add(i);
-        }
-
-        return important;
     }
 }

@@ -9,6 +9,8 @@ import online.data.WeightFrame;
 import java.math.BigInteger;
 import java.util.*;
 import online.data.WeightFrame.VertexWeight;
+import online.Query.VisitVertex;
+import online.Query.VisitPath;
 
 public class QueryResult {
     public Query query;
@@ -16,20 +18,29 @@ public class QueryResult {
     private WeightFrame weightFrame;
     private TwoHopFrame twoHopFrame;
 
-    public int featureNumber;
-    public int vertexNumber;
+    @lombok.Getter
+    private int featureNumber;
+    @lombok.Getter
+    private int vertexNumber;
 
-    public boolean[] vertexIncluded;
+    @lombok.Getter @lombok.Setter
+    private boolean[] vertexIncluded;
     // The vertexes the search will be performed on
-    public List<Integer> searchVertexes;
-    public int searchNumber;
+    @lombok.Getter
+    private List<Integer> searchVertexes;
+    @lombok.Getter
+    private int searchNumber;
 
     // subIndexes
-    public List<List<FeaturesFrame.VertexFeature>> features;
-    public List<List<Path>> hops;
+    @lombok.Getter @lombok.Setter
+    private List<List<FeaturesFrame.VertexFeature>> features;
+    @lombok.Getter @lombok.Setter
+    private List<List<Path>> hops;
     // minimal total vertex weight = minimal path weight + vertex weight
-    public double[] minVertexTotalWeightByIndex;
-    public List<VertexWeight> minVertexTotalWeight;
+    @lombok.Getter @lombok.Setter
+    private double[] minVertexTotalWeightByIndex;
+    @lombok.Getter @lombok.Setter
+    private List<VertexWeight> minVertexTotalWeight;
 
     public QueryResult(Query query, FeaturesFrame featuresFrame, WeightFrame weightFrame, TwoHopFrame twoHopFrame) {
         this.query = query;
@@ -41,21 +52,66 @@ public class QueryResult {
         this.vertexNumber = twoHopFrame.getVertexNumber();
     }
 
-    /* API - functions for external user */
+    /* Function provided for external use */
     public void processQuery() {
         featuresFrame.processQuery(this);
         twoHopFrame.processQuery(this);
         createSearchVertexes();
         twoHopFrame.getDataSubIndex(this);
-        System.out.println("Query search size: " + searchVertexes.size());
+        if (query.isDebug())
+            System.out.println("Query search size: " + searchVertexes.size());
 
         optimalRoutesSearch();
 
-        for (int i = 0; i < optimalPaths.size(); i++) {
-            if (optimalPaths.get(i) == null) break;
-            VertexPath path = optimalPaths.get(i);
-            System.out.format("Path %d - gain %.2f - cost %.2f\n", i, path.gain, path.cost);
+        if (query.isDebug()) {
+            for (int i = 0; i < optimalPaths.size(); i++) {
+                if (optimalPaths.get(i) == null) break;
+                VertexPath path = optimalPaths.get(i);
+                System.out.format("Path %d - gain %.2f - cost %.2f\n", i, path.gain, path.cost);
+            }
         }
+    }
+
+    public VisitPath getOptimalPath(int index) {
+        if (index > optimalPaths.size() || optimalPaths.get(index) == null)
+            return null;
+
+        VisitPath result = query.new VisitPath();
+        result.setGain(optimalPaths.get(index).gain);
+        result.setCost(optimalPaths.get(index).cost);
+        List<Integer> optimalPath = retrievePath(optimalPaths.get(index));
+
+        for (int i = 1; i < optimalPath.size(); i++) {
+            List<Integer> path = twoHopFrame.getPath(optimalPath.get(i-1), optimalPath.get(i));
+            for (int vertex: path) {
+                if (result.getVertexes().size() != 0 &&
+                        result.getVertexes().get(result.getVertexes().size() - 1) == vertex) continue;
+                result.getVertexes().add(vertex);
+                if (vertex == optimalPath.get(i-1) || vertex == optimalPath.get(i))
+                    result.getVisit().add(true);
+                else
+                    result.getVisit().add(false);
+            }
+        }
+
+        return result;
+    }
+
+    public List<VisitPath> getOptimalPaths() {
+        List<VisitPath> allPaths = new ArrayList<>();
+        VisitPath path;
+        int i = 0;
+        while ((path = getOptimalPath(i)) != null) {
+            allPaths.add(path);
+            i++;
+        }
+        return allPaths;
+    }
+
+    public int getOptimalPathNumber() {
+        int i = 0;
+        while(i < optimalPaths.size() && optimalPaths.get(i) != null) i += 1;
+        return i;
     }
 
     public double getVertexWeight(int vertex) {
@@ -65,8 +121,6 @@ public class QueryResult {
     public double getPathWeight(int start, int end) {
         return twoHopFrame.getPathWeight(hops, start, end);
     }
-
-    /* Inner functions for calculation */
 
     private void createSearchVertexes() {
         searchVertexes = new ArrayList<Integer>();
@@ -163,16 +217,14 @@ public class QueryResult {
     }
 
     private Map<VertexSet, Map<Integer, Double>> pathsForSet;
-    public List<VertexPath> optimalPaths;
-    public VertexPath lastOptimalPath;
+    private List<VertexPath> optimalPaths;
+    private VertexPath lastOptimalPath;
 
     private void optimalRoutesSearch() {
-        int k = 10;
-
         pathsForSet = new HashMap<>();
 
         optimalPaths = new LinkedList<>();
-        for (int i = 0; i < k; i++) {
+        for (int i = 0; i < query.getPathNumber(); i++) {
             optimalPaths.add(null);
         }
         lastOptimalPath = null;
@@ -206,7 +258,7 @@ public class QueryResult {
                         VertexPath path = bestPathToVertex(pathPartSet, pathVertex);
                         path.gain = currentGain;
 
-                        if (path.cost <= query.budget) {
+                        if (path.cost <= query.getBudget()) {
                             if (lastOptimalPath == null || calculateGainUP(path) + path.gain > lastOptimalPath.gain) {
                                 // Save the path to our map
                                 pathsForSet.get(currentVertexSet).put(pathVertex, path.cost);
@@ -248,8 +300,9 @@ public class QueryResult {
         VertexPath bestPath = new VertexPath(set, vertex);
 
         if (set.isEmpty()) {
-            bestPath.cost = getPathWeight(query.start, searchVertexes.get(vertex));
-            bestPath.cost += getPathWeight(searchVertexes.get(vertex), query.end);
+            bestPath.cost = getPathWeight(query.getStart(), searchVertexes.get(vertex));
+            bestPath.cost += getPathWeight(searchVertexes.get(vertex), query.getEnd());
+            bestPath.cost += getVertexWeight(searchVertexes.get(vertex));
             return bestPath;
         }
 
@@ -260,9 +313,10 @@ public class QueryResult {
         for (int lastVertex = 0; lastVertex < searchNumber; lastVertex++) {
             if (set.contains(lastVertex) && pathsForSet.get(set).containsKey(lastVertex)) {
                 double cost = pathsForSet.get(set).get(lastVertex);
-                cost -= getPathWeight(searchVertexes.get(lastVertex), query.end);
+                cost -= getPathWeight(searchVertexes.get(lastVertex), query.getEnd());
                 cost += getPathWeight(searchVertexes.get(lastVertex), searchVertexes.get(vertex));
-                cost += getPathWeight(searchVertexes.get(lastVertex), query.end);
+                cost += getPathWeight(searchVertexes.get(lastVertex), query.getEnd());
+                cost += getVertexWeight(searchVertexes.get(vertex));
 
                 if (cost < bestCost) {
                     bestLastVertex = lastVertex;
@@ -277,8 +331,10 @@ public class QueryResult {
     }
 
     public List<Integer> retrievePath(VertexPath path) {
+        // Returns the vertxes, that are included in the optimal path
+
         List<Integer> result = new ArrayList<>();
-        result.add(0, query.end);
+        result.add(0, query.getEnd());
 
         VertexSet set = path.pathStart;
         while (true) {
@@ -290,7 +346,7 @@ public class QueryResult {
             path = bestPathToVertex(set, previousVertex);
         }
 
-        result.add(0, query.start);
+        result.add(0, query.getStart());
         return result;
     }
 
@@ -309,51 +365,37 @@ public class QueryResult {
     private double calculateGainUP(VertexPath path) {
         VertexSet vertexSet = path.pathStart.add(path.lastVertex);
 
-        double cost = path.cost - getPathWeight(searchVertexes.get(path.lastVertex), query.end);
-        cost += (minVertexTotalWeightByIndex[query.end]);
+        double cost = path.cost - getPathWeight(searchVertexes.get(path.lastVertex), query.getEnd());
+        cost += (minVertexTotalWeightByIndex[query.getEnd()]);
                 // + minVertexTotalWeightByIndex[searchVertexes.get(path.lastVertex)]);
 
-        int maxCount = 0;
-        int maxCountIndex = 0;
-        double deltaCost = 1;
-        for (int i = 0; i < minVertexTotalWeight.size(); ++i) {
-            VertexWeight vertexWeight = minVertexTotalWeight.get(i);
-            int vertex = vertexWeight.getVertex();
-
-            if (!vertexSet.contains(vertex) &&
-                    searchVertexes.get(vertex) != query.start && searchVertexes.get(vertex) != query.end) {
-                deltaCost = vertexWeight.getWeight();
-                if (cost + deltaCost > query.budget) {
-                    maxCountIndex = i;
-                    break;
-                }
-                cost += deltaCost;
-
-                maxCount += 1;
-            }
-        }
-
-
         double initialSetGain = calculateGain(vertexSet);
-        List<VertexGain> vertexGain = new ArrayList<>();
+        List<VertexGain> vertexGainList = new ArrayList<>();
         for (int i = 0; i < searchNumber; i++) {
             if (!vertexSet.contains(i) &&
-                    searchVertexes.get(i) != query.start && searchVertexes.get(i) != query.end) {
+                    searchVertexes.get(i) != query.getStart() && searchVertexes.get(i) != query.getEnd()) {
                 double gain = calculateGain(vertexSet.flip(i)) - initialSetGain;
-                vertexGain.add(new VertexGain(i, gain,
+                vertexGainList.add(new VertexGain(i, gain,
                         gain / minVertexTotalWeightByIndex[searchVertexes.get(i)]));
             }
         }
-        vertexGain.sort(Comparator.comparingDouble((VertexGain vg) -> vg.costGain));
-        Collections.reverse(vertexGain);
+        vertexGainList.sort(Comparator.comparingDouble((VertexGain vg) -> vg.costGain));
+        Collections.reverse(vertexGainList);
 
         double upperBound = 0;
-        for (int i = 0; i < maxCount - 1; i++) {
-            upperBound += vertexGain.get(i).gain;
-        }
-        if (maxCount < vertexGain.size()) {
-            upperBound += vertexGain.get(maxCount).gain * deltaCost /
-                    minVertexTotalWeightByIndex[searchVertexes.get(maxCountIndex)];
+        double deltaCost = 1;
+        for (int i = 0; i < vertexGainList.size(); ++i) {
+            VertexGain vertexGain = vertexGainList.get(i);
+
+            deltaCost = minVertexTotalWeightByIndex[searchVertexes.get(vertexGain.vertex)];
+            if (cost + deltaCost > query.getBudget()) {
+                upperBound += vertexGainList.get(i).gain * deltaCost /
+                        minVertexTotalWeightByIndex[searchVertexes.get(i)];
+                break;
+            }
+            cost += deltaCost;
+
+            upperBound += vertexGainList.get(i).gain;
         }
 
         return upperBound;
@@ -361,10 +403,10 @@ public class QueryResult {
 
     private double calculateGain(VertexSet vertexSet) {
         double currentGain = 0;
-        for (int feature = 0; feature < query.featurePreference.length; feature++) {
-            if (query.featurePreference[feature] == 0) continue;
-            currentGain += query.featurePreference[feature] *
-                    query.routeDiversityFunction.call(this, feature, vertexSet);
+        for (int feature = 0; feature < query.getFeaturePreference().length; feature++) {
+            if (query.getFeaturePreference()[feature] == 0) continue;
+            currentGain += query.getFeaturePreference()[feature] *
+                    query.getRouteDiversityFunction().call(this, feature, vertexSet);
         }
 
         return currentGain;

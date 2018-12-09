@@ -19,15 +19,15 @@ public class FeaturesFrame {
     @lombok.Getter
     @lombok.Setter
     public class VertexFeature implements Serializable {
-        public int vertex;
-        public double rating;
+        private int vertex;
+        private double rating;
 
         public String toString() {
             return String.format("%d %.2f", vertex, rating);
         }
     }
 
-    private List<List<VertexFeature>> readData(String cityCode) {
+    private void readData(String cityCode) {
         String path = String.format("data/%s_inverted_kwds.txt", cityCode);
         File file = new File(path);
 
@@ -60,7 +60,7 @@ public class FeaturesFrame {
             e.printStackTrace();
         }
 
-        return data;
+        this.data = data;
     }
 
     private void printData(List<VertexFeature> data) {
@@ -71,18 +71,18 @@ public class FeaturesFrame {
 
     public FeaturesFrame(String cityCode) {
         // data - feature by index
-        data = readData(cityCode);
+        readData(cityCode);
     }
 
     public void processQuery(QueryResult queryResult) {
         // Function returns a list of vertex-feature-rating for given criteria
 
         List<List<VertexFeature>> result = new ArrayList<>();
-        boolean[] vertexIncluded = new boolean[queryResult.vertexNumber];
-        for (int i = 0; i < queryResult.vertexNumber; i++) vertexIncluded[i] = false;
+        boolean[] vertexIncluded = new boolean[queryResult.getVertexNumber()];
+        for (int i = 0; i < queryResult.getVertexNumber(); i++) vertexIncluded[i] = false;
 
-        double[] featureRating = queryResult.query.featurePreference;
-        double minRating = queryResult.query.minFeatureValue;
+        double[] featureRating = queryResult.query.getFeaturePreference();
+        double minRating = queryResult.query.getMinFeatureValue();
 
         for (int feature = 0; feature < featureNumber; feature++) {
             List<VertexFeature> vertexes = data.get(feature);
@@ -97,7 +97,7 @@ public class FeaturesFrame {
             }
         }
 
-        queryResult.features = result;
-        queryResult.vertexIncluded = vertexIncluded;
+        queryResult.setFeatures(result);
+        queryResult.setVertexIncluded(vertexIncluded);
     }
 }

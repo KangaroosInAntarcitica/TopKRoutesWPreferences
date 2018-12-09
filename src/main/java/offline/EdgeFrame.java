@@ -118,21 +118,21 @@ public class EdgeFrame {
             // the path goes from the label with lower rank
             PathData pathData = new PathData();
             int key;
-            if (ranking.get(connection.vertex) > ranking.get(connection.vertexTo)) {
-                key = createId(connection.vertexTo, connection.vertex);
-                pathData.nextVertex = connection.vertex;
-                pathData.lastVertex = connection.vertexTo;
+            if (ranking.get(connection.getVertex()) > ranking.get(connection.getVertexTo())) {
+                key = createId(connection.getVertexTo(), connection.getVertex());
+                pathData.nextVertex = connection.getVertex();
+                pathData.lastVertex = connection.getVertexTo();
             } else {
-                key = createId(connection.vertex, connection.vertexTo);
-                pathData.nextVertex = connection.vertexTo;
-                pathData.lastVertex = connection.vertex;
+                key = createId(connection.getVertex(), connection.getVertexTo());
+                pathData.nextVertex = connection.getVertexTo();
+                pathData.lastVertex = connection.getVertex();
             }
-            pathData.weight = connection.weight;
+            pathData.weight = connection.getWeight();
             prevLabel.put(key, pathData);
         }
         allLabel.putAll(prevLabel);
 
-        // Main loop
+        // online.Main loop
         while (prevLabel.size() != 0) {
             System.out.format("Iteration - prevLabel.size: %10d, allLabel.size: %10d\n", prevLabel.size(), allLabel.size());
             currentLabel = new HashMap<>();
@@ -185,12 +185,12 @@ public class EdgeFrame {
         List<Path> data2Hop = new ArrayList<>();
         for (int connection: allLabel.keySet()) {
             Path item = new Path();
-            item.vertex = connection / vertexNumber;
-            item.vertexTo = connection % vertexNumber;
+            item.setVertex(connection / vertexNumber);
+            item.setVertexTo(connection % vertexNumber);
             PathData connectionData = allLabel.get(connection);
-            item.weight = connectionData.weight;
-            item.nextVertex = connectionData.nextVertex;
-            item.lastVertex = connectionData.lastVertex;
+            item.setWeight(connectionData.weight);
+            item.setNextVertex(connectionData.nextVertex);
+            item.setLastVertex(connectionData.lastVertex);
             data2Hop.add(item);
         }
         this.data2Hop = data2Hop;
@@ -212,8 +212,8 @@ public class EdgeFrame {
         }
 
         for (Path path : data) {
-            ++allVertexes.get(path.vertex).count;
-            ++allVertexes.get(path.vertexTo).count;
+            ++allVertexes.get(path.getVertex()).count;
+            ++allVertexes.get(path.getVertexTo()).count;
         }
 
         allVertexes.sort(Comparator.comparingInt((Vertex v) -> v.count));

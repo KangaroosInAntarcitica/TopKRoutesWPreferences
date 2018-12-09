@@ -5,11 +5,11 @@ import java.io.Serializable;
 @lombok.Getter
 @lombok.Setter
 public class Path implements Serializable {
-    public int vertex;
-    public int vertexTo;
-    public int weight;
-    public int nextVertex;
-    public int lastVertex;
+    private int vertex;
+    private int vertexTo;
+    private int weight;
+    private int nextVertex;
+    private int lastVertex;
 
     public Path(String representation) {
         String[] data = representation.split(" ");

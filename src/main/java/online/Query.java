@@ -2,6 +2,7 @@ package online;
 
 import online.data.FeaturesFrame;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @lombok.Getter
@@ -11,17 +12,51 @@ public class Query {
         double call(QueryResult queryResult, int feature, QueryResult.VertexSet vertexSet);
     }
 
+    @lombok.Getter
+    @lombok.Setter
+    public static class VisitVertex {
+        private int vertex;
+        private boolean visited;
+
+        public VisitVertex(int vertex, boolean visited) {
+            this.vertex = vertex;
+            this.visited = visited;
+        }
+
+        public String toString() {
+            return String.format("%s%d%s", visited ? "{" : "", vertex, visited ? "}" : "");
+        }
+    }
+
+    @lombok.Getter
+    @lombok.Setter
+    public class VisitPath {
+        public VisitPath() {
+            vertexes = new ArrayList<>();
+            visit = new ArrayList<>();
+        }
+
+        private List<Integer> vertexes;
+        private List<Boolean> visit;
+        private double cost;
+        private double gain;
+    }
+
     public Query() {
+        debug = false;
+        pathNumber = 10;
         minFeatureValue = 0.5;
         routeDiversityFunction = new PowerLawFunction();
     }
 
-    public int start;
-    public int end;
-    public double budget;
-    public double[] featurePreference;
-    public double minFeatureValue;
-    public AggregationFunction routeDiversityFunction;
+    private boolean debug;
+    private int pathNumber;
+    private int start;
+    private int end;
+    private double budget;
+    private double[] featurePreference;
+    private double minFeatureValue;
+    private AggregationFunction routeDiversityFunction;
 
     public class PowerLawFunction implements AggregationFunction {
         private double alpha;
@@ -34,13 +69,13 @@ public class Query {
         public double call(QueryResult queryResult, int feature, QueryResult.VertexSet vertexSet) {
             double result = 0;
 
-            List<FeaturesFrame.VertexFeature> vertexes = queryResult.features.get(feature);
+            List<FeaturesFrame.VertexFeature> vertexes = queryResult.getFeatures().get(feature);
             int rating = 0;
             for (FeaturesFrame.VertexFeature vertexFeature: vertexes) {
-                if (vertexSet.contains(vertexFeature.vertex)) {
+                if (vertexSet.contains(vertexFeature.getVertex())) {
                     ++rating;
 
-                    result += Math.pow(rating, - alpha) * vertexFeature.rating;
+                    result += Math.pow(rating, - alpha) * vertexFeature.getRating();
                 }
             }
 
