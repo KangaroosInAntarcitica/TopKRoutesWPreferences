@@ -74,7 +74,31 @@ To Visualise data, the functions of `VisualisationApp` can be used:
 * `drawVisitPath` - draws a path of vertexes, returned by the `processQuery()` function. The path will draw vertexes, that
 user needs to visit in `black`, while those that they should only pass on the way in `purple`.
 
-##### Algorithm implementation description
+### Algorithm implementation description
+##### 2-hop Labeling
+The 2-hop labeling algorithm solves the problem of generating the (almost) shortest path for each pair of vertexes.
+Because generating all the possible combinations would take up <code>n<sup>2</sup></code> storage space, which is too much,
+the 2 hop labeling formulates the task in the following way:
+> For every 2 vertexes <code>v<sub>1</sub></code> and <code>v<sub>2</sub></code> there are 2 generated paths,  
+such that
+<code>p<sub>1</sub> = v<sub>1</sub> -> v<sub>3</sub></code> and <code>p<sub>2</sub> = v<sub>2</sub> -> v<sub>3</sub></code>.  
+<code>v<sub>3</sub></code> is then called a pivit.  
+The 2 paths <code>p<sub>1</sub></path></code> and <code>p<sub>2</sub></path></code> are called hops.
+
+Basically this means, that every path can be created from 2 hops, if we find the minimal pivit, common for both vertexes.  
+The results of 2-hop label generation are directly used inside this algorithm.
+
+##### Path gain
+Path gain is just how well the path matches the parameters, specified by user. Because, we are only interested in what POI's
+user visits, the order of vertexes is not important and we can calculate the gain on the set of vertexes.  
+The gain is calculated using an exponential aggregation function. 
+
+That to get gain we sum over all the combinations of `[feature rating at POI] * [feature preference]` for every feature 
+and POI in our path. Because users mostly like diversity in their route, we multiply this by <code>i<sup>-a</sup></code>,
+where `i` is the number POI's with this feature have already occured, sorted by feature rating and `a` is a parameter `> 0`
+how much diversity user wants.
+
+##### PACER
 To find the optimal paths, the algorithm goes through all the possible combinations of the paths and saves the best on
 the way. It first generates smaller paths and then recursively calls itself to grow them into larger paths.  
 
