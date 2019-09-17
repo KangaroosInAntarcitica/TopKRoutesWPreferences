@@ -3,7 +3,7 @@
  This project is completely based on the following work:
 *"Top-k Route Search through Submodularity Modeling of Recurrent POI Features"* by *Hongwei Liang* and *Ke Wang*.
  Links to the original work:  
-1. [Paper of Top-k route search](https://arxiv.org/) The original algorithm paper.
+1. [Paper of Top-k route search](http://www.sfu.ca/~hongweil/files/RouteSearch-sigir18.pdf) The original algorithm paper.
 2. [Hop Doubling Label Indexing for Point-to-Point Distance Querying on Scale-Free Networks](http://www.vldb.org/pvldb/vol7/p1203-jiang.pdf)
  paper, that is frequently referenced. Its algorithm is used inside the top-k search.  
 3. [github](https://github.com/LazyAir/SIGIR18) of the original work. (Implemented in `C++`)
